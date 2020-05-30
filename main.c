@@ -1,3 +1,7 @@
+// Build with:
+// gcc main.c -L/usr/X11R6/lib -lX11 -o x11 -g -Wall
+// Tested on xubuntu 20.
+
 // Platform includes
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -208,7 +212,7 @@ static unsigned popcnt(uint32_t value) {
 }
 
 
-void init_gc(state_t *state, uint32_t value_mask, uint32_t *value_list) {
+void create_gc(state_t *state, uint32_t value_mask, uint32_t *value_list) {
     state->graphics_context_id = generate_id(state);
     uint16_t flag_count = popcnt(value_mask);
     uint16_t len = 4 + flag_count;
@@ -225,28 +229,21 @@ void init_gc(state_t *state, uint32_t value_mask, uint32_t *value_list) {
 }
 
 
-void init_window(state_t *state, uint16_t x, uint16_t y, uint16_t w, uint16_t h,
-                 uint32_t window_parent, uint32_t visual, uint32_t value_mask,
-                 uint32_t *value_list) {
+void create_window(state_t *state, uint16_t w, uint16_t h, uint32_t window_parent) {
     state->window_id = generate_id(state);
 
-    uint16_t flag_count = popcnt(value_mask);
-    uint16_t len = 8 + flag_count;
-    uint32_t packet[8 + 32];
-
+    int const len = 8;
+    uint32_t packet[len];
     packet[0] = X11_OPCODE_CREATE_WINDOW | len<<16;
     packet[1] = state->window_id;
     packet[2] = window_parent;
-    packet[3] = x | (y<<16);
+    packet[3] = 0; // x,y pos. System will position window.
     packet[4] = w | (h<<16);
     packet[5] = (X11_DEFAULT_BORDER<<16) | X11_DEFAULT_GROUP;
-    packet[6] = visual;
-    packet[7] = value_mask;
-    for (int i = 0; i < flag_count; ++i) {
-        packet[8 + i] = value_list[i];
-    }
+    packet[6] = 0; // Visual: Copy from parent.
+    packet[7] = 0; // value_mask;
 
-    fatal_write(state->socket_fd, packet, len * 4);
+    fatal_write(state->socket_fd, packet, sizeof(packet));
 }
 
 
@@ -292,15 +289,12 @@ void put_image(state_t *state) {
 int main() {
     state_t state = {0};
     x11_init(&state);
-    init_gc(&state, X11_GC_GRAPHICS_EXPOSURES, (uint32_t[]){X11_EXPOSURES_NOT_ALLOWED});
-    init_window(&state, 0, 0, 320, 240,
-                state.screens[0].root_id, state.screens[0].root_visual_id,
-                X11_CW_BACK_PIXEL, (uint32_t[]){0xff00ff});
+    create_gc(&state, X11_GC_GRAPHICS_EXPOSURES, (uint32_t[]){X11_EXPOSURES_NOT_ALLOWED});
+    create_window(&state, 320, 240, state.screens[0].root_id);
     map_window(&state);
 
     while (1) {
         put_image(&state);
-        sleep(1);
-        break;
+        usleep(10000);
     }
 }
