@@ -25,7 +25,8 @@ enum {
 
     X11_OPCODE_CREATE_WINDOW = 1,
     X11_OPCODE_MAP_WINDOW = 8,
-    X11_OPCODE_CREATE_GC = 16,
+    X11_OPCODE_CREATE_GC = 55,
+    X11_OPCODE_PUT_IMAGE = 72,
 
     X11_CW_BACK_PIXEL = 1<<1,
     X11_CW_EVENT_MASK = 1<<11,
@@ -258,6 +259,36 @@ void map_window(state_t *state) {
 }
 
 
+void put_image(state_t *state) {
+    enum { W = 100, H = 100 };
+    enum { BITMAP_SIZE_BYTES = W * H * 4 };
+
+    static uint32_t *packet = NULL;
+    if (!packet) {
+        packet = malloc(24 + BITMAP_SIZE_BYTES);
+    }
+
+    uint32_t *bmp = packet + 6;
+    for (int y = 0; y < H; y++) {
+        uint32_t *row = bmp + y * W;
+        for (int x = 0; x < W; x++) {
+            row[x] = (x << 8) + y;
+        }
+    }
+
+    uint32_t bmp_format = 2 << 8;
+    uint32_t request_len = (W * H + 6) << 16;
+    packet[0] = X11_OPCODE_PUT_IMAGE | bmp_format | request_len;
+    packet[1] = state->window_id;
+    packet[2] = state->graphics_context_id;
+    packet[3] = W | (H << 16); // Width and height.
+    packet[4] = 0; // Dst X and Y.
+    packet[5] = 24 << 8; // Bit depth.
+
+    fatal_write(state->socket_fd, packet, 24 + BITMAP_SIZE_BYTES);
+}
+
+
 int main() {
     state_t state = {0};
     x11_init(&state);
@@ -267,5 +298,9 @@ int main() {
                 X11_CW_BACK_PIXEL, (uint32_t[]){0xff00ff});
     map_window(&state);
 
-    while (1) sleep(1);
+    while (1) {
+        put_image(&state);
+        sleep(1);
+        break;
+    }
 }
