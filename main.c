@@ -1,5 +1,5 @@
 // Build with:
-// gcc main.c -L/usr/X11R6/lib -lX11 -o x11 -g -Wall
+// gcc main.c -o x11 -g -Wall
 // Tested on xubuntu 20.
 
 // Platform includes
@@ -22,19 +22,12 @@
 // X11 protocol definitions
 
 enum {
-    X11_DEFAULT_BORDER = 0,
-    X11_DEFAULT_GROUP = 0,
-    X11_EXPOSURES_NOT_ALLOWED = 0,
-    X11_GC_GRAPHICS_EXPOSURES = 1<<16,
-
     X11_OPCODE_CREATE_WINDOW = 1,
     X11_OPCODE_MAP_WINDOW = 8,
     X11_OPCODE_CREATE_GC = 55,
     X11_OPCODE_PUT_IMAGE = 72,
 
-    X11_CW_BACK_PIXEL = 1<<1,
     X11_CW_EVENT_MASK = 1<<11,
-
     X11_EVENT_MASK_KEY_PRESS = 1,
     X11_EVENT_MASK_POINTER_MOTION = 1<<6,
 };
@@ -202,28 +195,14 @@ static uint32_t generate_id(state_t *state) {
 }
 
 
-static unsigned popcnt(uint32_t value) {
-    int count = 0;
-    while (value) {
-        count += value & 1;
-        value >>= 1;
-    }
-    return count;
-}
-
-
-void create_gc(state_t *state, uint32_t value_mask, uint32_t *value_list) {
+void create_gc(state_t *state) {
     state->graphics_context_id = generate_id(state);
-    uint16_t flag_count = popcnt(value_mask);
-    uint16_t len = 4 + flag_count;
-    uint32_t packet[4 + 32]; // Ideally length would be 'len' but use 4 + 32 to keep length fixed.
-    packet[0] = X11_OPCODE_CREATE_GC | (len<<16);
+    int const len = 4;
+    uint32_t packet[len];
+    packet[0] = X11_OPCODE_CREATE_GC | len<<16;
     packet[1] = state->graphics_context_id;
     packet[2] = state->screens[0].root_id;
-    packet[3] = value_mask;
-    for (int i = 0; i < flag_count; ++i) {
-        packet[4 + i] = value_list[i];
-    }
+    packet[3] = 0; // Value mask.
 
     fatal_write(state->socket_fd, packet, len * 4);
 }
@@ -239,7 +218,7 @@ void create_window(state_t *state, uint16_t w, uint16_t h, uint32_t window_paren
     packet[2] = window_parent;
     packet[3] = 0; // x,y pos. System will position window.
     packet[4] = w | (h<<16);
-    packet[5] = (X11_DEFAULT_BORDER<<16) | X11_DEFAULT_GROUP;
+    packet[5] = 0; // DEFAULT_BORDER and DEFAULT_GROUP.
     packet[6] = 0; // Visual: Copy from parent.
     packet[7] = 0; // value_mask;
 
@@ -250,7 +229,7 @@ void create_window(state_t *state, uint16_t w, uint16_t h, uint32_t window_paren
 void map_window(state_t *state) {
     int const len = 2;
     uint32_t packet[len];
-    packet[0] = X11_OPCODE_MAP_WINDOW | (len<<16);
+    packet[0] = X11_OPCODE_MAP_WINDOW | len<<16;
     packet[1] = state->window_id;
     fatal_write(state->socket_fd, packet, 8);
 }
@@ -274,7 +253,7 @@ void put_image(state_t *state) {
     }
 
     uint32_t bmp_format = 2 << 8;
-    uint32_t request_len = (W * H + 6) << 16;
+    uint32_t request_len = (uint32_t)(W * H + 6) << 16;
     packet[0] = X11_OPCODE_PUT_IMAGE | bmp_format | request_len;
     packet[1] = state->window_id;
     packet[2] = state->graphics_context_id;
@@ -289,7 +268,7 @@ void put_image(state_t *state) {
 int main() {
     state_t state = {0};
     x11_init(&state);
-    create_gc(&state, X11_GC_GRAPHICS_EXPOSURES, (uint32_t[]){X11_EXPOSURES_NOT_ALLOWED});
+    create_gc(&state);
     create_window(&state, 320, 240, state.screens[0].root_id);
     map_window(&state);
 
