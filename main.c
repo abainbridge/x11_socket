@@ -181,8 +181,9 @@ void x11_init(state_t *state) {
                state->connection_reply_header.len * 4);
 
     // Set some pointers into the connection reply because they'll be convenient later.
+    int vendor_len_plus_padding = (g_state.connectionReplySuccessBody->vendor_len + 3) & ~3;
     state->pixmap_formats = (pixmap_format_t *)(state->connection_reply_success_body->vendor_string +
-                             state->connection_reply_success_body->vendor_len);
+                             vendor_len_plus_padding);
     state->screens = (screen_t *)(state->pixmap_formats +
                                   state->connection_reply_success_body->num_pixmap_formats);
 
