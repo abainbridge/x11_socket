@@ -17,6 +17,8 @@
 
 #define FATAL_ERROR(msg, ...) { fprintf(stderr, msg "\n", ##__VA_ARGS__); exit(-1); }
 
+// X11 padding function
+#define P(x) (4 - ((x) % 4) % 4)
 
 //
 // X11 protocol definitions
@@ -182,7 +184,8 @@ void x11_init(state_t *state) {
 
     // Set some pointers into the connection reply because they'll be convenient later.
     state->pixmap_formats = (pixmap_format_t *)(state->connection_reply_success_body->vendor_string +
-                             state->connection_reply_success_body->vendor_len);
+                             state->connection_reply_success_body->vendor_len +
+                             P(state->connection_reply_success_body->vendor_len));
     state->screens = (screen_t *)(state->pixmap_formats +
                                   state->connection_reply_success_body->num_pixmap_formats);
 
